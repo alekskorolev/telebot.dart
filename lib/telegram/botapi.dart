@@ -13,10 +13,10 @@ const int PORT = 80;
 
 class BotApi {
     int _port = 80;
-    String _host = '127.0.0.1';
+    String _host;
     String _botKey;
     String _webHookUrl;
-    String _apiBaseUrl = 'https://api.telegram.org/bot';
+    String _apiBaseUrl;
     List<MsgReader> _listeners = [];
 
     BotApi(
@@ -32,7 +32,6 @@ class BotApi {
         this._botKey = botKey;
         this._webHookUrl = webHookUrl;
         this._apiBaseUrl = apiUrl;
-
         var handler = const shelf.Pipeline()
             .addMiddleware(shelf.logRequests())
             .addHandler(_echoRequest);
@@ -73,7 +72,7 @@ class BotApi {
         } catch(exception) {
             msg = {};
         }
-        if (msg.containsKey('message')) {
+        if (msg.containsKey('message') && msg['message'] is Map) {
             await _onMessage(msg['message']);
         }
         print(body);
@@ -81,18 +80,29 @@ class BotApi {
         return new shelf.Response.ok('Request for "${request.url}"');
     }
 
+    Future<bool> onMessage(Map msg) => _onMessage(msg);
     Future<bool> _onMessage(Map msg) async {
-        String chatId = msg['chat']['id'];
-        String ask = msg['text'];
-        bool hasAnswer = false;
-
-        for (MsgReader reader in _listeners) {
-            Map answer = await reader.onMessage(ask, msg, hasAnswer);
+        String chatId;
+        try {
+            chatId = msg['chat']['id'];
+        } catch(exception) {
+            return new Future.value(false);
+        }
+        Future.wait(_listeners.map((MsgReader reader) async {
+            return {'chance': await reader.itsForMe(msg), 'reader': reader};
+        })).then((List chances) async {
+            Map maxChance = chances.reduce((Map first, Map next) {
+                bool compareChance = first['chance'] > next['chance'];
+                return compareChance ? first : next;
+            });
+            MsgReader reader = maxChance['reader'];
+            Map answer = await reader.onMessage(msg);
             if (answer != Null) {
-                hasAnswer = true;
                 await _sendMsg(chatId, answer['text']);
             }
-        }
+        }).catchError((Error e) {
+            print(e);
+        });
         return new Future.value(true);
     }
 

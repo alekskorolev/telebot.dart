@@ -5,10 +5,7 @@ abstract class MsgReader {
 
     }
 
-    Future<Map> onMessage(String text, Map msg, [bool hasAnswer = false]) async {
-        if (!await itsForMe(text, hasAnswer)) {
-            return new Future.value(Null);
-        }
+    Future<Map> onMessage(Map msg) async {
         Map question = await parseQuestion(msg);
         return prepareAnswer(question);
     }
@@ -26,5 +23,5 @@ abstract class MsgReader {
     /*
      * Check user text for contains class command
      */
-    Future<bool> itsForMe(String text, [bool hasAnswer = false]);
+    Future<int> itsForMe(Map msg);
 }
